@@ -15,7 +15,6 @@
         "!./node_modules/**/*.ts"
     ],
     "files": [
-        "./liquid-utils.d.ts",
         "./liquid-utils.ts"
     ]
 }

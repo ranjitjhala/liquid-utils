@@ -1,10 +1,12 @@
 /// <reference path="../typings/hover.d.ts" />
-export declare function debug(msg: string): void;
-export declare function provider(p: Hover.Provider): Hover.IProvider;
-export declare class HoverTooltips {
-    private editorWatch;
-    provider: Hover.IProvider;
-    syntax: string;
-    activate(): void;
-    deactivate(): void;
+export declare type imap = {
+    [x: number]: A;
+};
+export interface Annot {
+    ident: string;
+    ann: string;
+    row: number;
+    col: number;
 }
+export declare var infoProvider: Hover.IProvider;
+export declare var errorProvider: Hover.IProvider;
