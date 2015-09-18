@@ -1,7 +1,8 @@
 /// <reference path="../typings/hover.d.ts" />
 
-import path = require('path');
-import fs   = require('fs');
+import path          = require('path');
+import fs            = require('fs');
+import child_process = require('child_process');
 
 /*****************************************************************************/
 /******** PUBLIC : Type definitions for identifier annotations ***************/
@@ -16,6 +17,13 @@ export interface Annot {
   , col   : number
   }
 
+export type TypeInfo = imap<imap<Annot>>
+
+export interface LiquidInfo {
+    status : string
+  , types  : TypeInfo
+  , errors : Hover.Error[]
+}
 
 /*****************************************************************************/
 /******** PRIVATE : Type definitions for identifier annotations **************/
@@ -24,12 +32,11 @@ export interface Annot {
 type smap<A> = { [x:string] : A }
 
 interface FileInfo {
-    file : string              // completely expanded path to file
-  , time : Date                // time at which current info is valid
-  , info : imap<imap<Annot>>   // type information
-  , errs : Hover.Error[]       // error information
+    file : string        // completely expanded path to file
+  , time : Date          // time at which current info is valid
+  , info : TypeInfo      // type information
+  , errs : Hover.Error[] // error information
 }
-
 
 /*****************************************************************************/
 /*****************************************************************************/
@@ -75,6 +82,11 @@ function lookupErrors(i:FileInfo): Hover.Error[] {
   return i.errs;
 }
 
+function modifiedAt(sFile:string):Q.Promise<Date> {
+      return Q.nfcall(fs.stat, sFile)
+              .then((stats:any) => stats.mtime)
+}
+
 /*****************************************************************************/
 /******** Exported API *******************************************************/
 /*****************************************************************************/
@@ -82,9 +94,9 @@ function lookupErrors(i:FileInfo): Hover.Error[] {
 export class Annotations {
 
     private fileMap : smap<FileInfo>;
-    private cmd     : string; // "liquid" or "rsc"
+    private cmd     : string;   // "liquid" or "rsc"
     private args    : string[]; // "liquid" or "rsc"
-    private dir     : string; // ".liquid"
+    private subDir  : string;   // ".liquid"
 
     constructor(cmd:string, args:string[], subDir:string) {
         this.fileMap = {};
@@ -104,18 +116,18 @@ export class Annotations {
       return path.join(bDir, this.subDir, jFile);
     }
 
-    rebuild(sFile:string):Q.Promise<FileInfo> {
+    private rebuild(sFile:string):Q.Promise<FileInfo> {
       var cmd_  = this.command(sFile);
       var jFile = this.jsonFile(sFile);
-      return Q.nfcall(child_process.exec, cmd_)
-              .then((r) => {
-                      var r:any = JSON.parse(fs.readFileSync(jFile, "utf8"));
-                      return r;
-                   })
+      var run:any = Q.nfcall(child_process.exec, cmd_);
+      return run.then((r) => {
+        var r:any = JSON.parse(fs.readFileSync(jFile, "utf8"));
+        return r;
+        })
     }
 
     // Reload .json file if it is stale, and return resulting FileInfo
-    refresh(sFile:string):Q.Promise<FileInfo> {
+    private refresh(sFile:string):Q.Promise<FileInfo> {
       var jFile = this.jsonFile(sFile);
       return modifiedAt(sFile)
                .then((sTime) => {
@@ -138,16 +150,18 @@ export class Annotations {
     }
 
     getErrors(f:string):Q.Promise<Hover.Error[]>{
-       return undefined;
+       return this.refresh(f)
+                  .then(lookupErrors)
+                  .catch((err) => {return []});
+
     }
 }
 
-/********************************************************************************/
-/******** "Global" Annotation Table *********************************************/
-/********************************************************************************/
+/*****************************************************************************/
+/******** Example: Annotation Table ******************************************/
+/*****************************************************************************/
 
-
-var annotTable : imap<imap<Annot>>
+var annotTable : TypeInfo
    = { 5 : { 14 : { ident : "foo"
                   , ann   : "int -> int"
                   , row   : 5
@@ -170,12 +184,25 @@ var annotTable : imap<imap<Annot>>
 var ex:LiquidInfo
   = { "status": "error"
     , "types" : annotTable
-    , "errors": [ {"start":{"line":6,"column":14}
-                  ,"stop":{"line":6,"column":17}
+    , "errors": [ {"start": { "file": "/Users/rjhala/tmp/foo.hs"
+                            , "line":6
+                            , "column":14
+                            }
+                  ,"stop":  { "file": "/Users/rjhala/tmp/foo.hs"
+                            , "line":6
+                            , "column":17
+                            }
                   ,"message":"/Users/rjhala/tmp/foo.hs:6:14-16: Error: GHC Error\n    Couldn't match expected type ‘Int’ with actual type ‘[Char]’"
                   }
-                , {"start":{"line":9,"column":16}
-                  ,"stop":{"line":10,"column":21}
+
+                , {"start": { "file"   : "/Users/rjhala/tmp/foo.hs"
+                            , "line"   : 9
+                            , "column" : 16
+                            }
+                  ,"stop" : { "file"   : "/Users/rjhala/tmp/foo.hs"
+                            , "line"   : 10
+                            , "column" : 21
+                            }
                   ,"message":"/Users/rjhala/tmp/foo.hs:(9,16)-(10,20): Error: GHC Error\n    Couldn't match expected type ‘Int’ with actual type ‘[Char]’"
                   }
                 ]
