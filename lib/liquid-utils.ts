@@ -4,6 +4,8 @@ import path          = require('path');
 import fs            = require('fs');
 import child_process = require('child_process');
 
+export var debugLiquidUtils:any;
+
 /*****************************************************************************/
 /******** PUBLIC : Type definitions for identifier annotations ***************/
 /*****************************************************************************/
@@ -23,6 +25,23 @@ export interface LiquidInfo {
     status : string
   , types  : TypeInfo
   , errors : Hover.Error[]
+}
+
+interface AtomLinterError {
+  type: string,
+  text?: string,
+  html?: string,
+  filePath?: string,
+  range?: number[][],
+  trace?: Array<AtomLinterTrace>
+}
+
+interface AtomLinterTrace {
+  type: string,  // "Trace",
+  text?: string,
+  html?: string,
+  filePath: string,
+  range?: number[][]
 }
 
 /*****************************************************************************/
@@ -77,9 +96,17 @@ function errInfo(text:string):Hover.Info {
   // });
 }
 
+function mkError(f:string, e:Hover.Error):AtomLinterError {
+  return { type     : 'Error'
+         , text     : e.message
+         , filePath : f
+         , range    : [ [e.start.line, e.start.column]
+                      , [e.stop.line , e.stop.column] ]
+         };
+}
 
-function lookupErrors(i:FileInfo): Hover.Error[] {
-  return i.errs;
+function lookupErrors(i:FileInfo): AtomLinterError[] {
+  return i.errs.map((e) => {return mkError(i.file, e)});
 }
 
 function modifiedAt(sFile:string):Q.Promise<Date> {
@@ -95,7 +122,7 @@ export class Annotations {
 
     private fileMap : smap<FileInfo>;
     private cmd     : string;   // "liquid" or "rsc"
-    private args    : string[]; // "liquid" or "rsc"
+    private args    : string[]; // "options"
     private subDir  : string;   // ".liquid"
 
     constructor(cmd:string, args:string[], subDir:string) {
@@ -116,14 +143,22 @@ export class Annotations {
       return path.join(bDir, this.subDir, jFile);
     }
 
-    private rebuild(sFile:string):Q.Promise<FileInfo> {
+    private rebuild(sFile:string, sTime:Date):Q.Promise<FileInfo> {
       var cmd_  = this.command(sFile);
       var jFile = this.jsonFile(sFile);
-      var run:any = Q.nfcall(child_process.exec, cmd_);
-      return run.then((r) => {
-        var r:any = JSON.parse(fs.readFileSync(jFile, "utf8"));
-        return r;
-        })
+      return modifiedAt(jFile)
+             .then((jTime) => {
+               if (jTime && sTime < jTime)
+                 return;
+               return Q.nfcall(child_process.exec, cmd_);
+              })
+             .then((z:any) => {
+               var r:any = JSON.parse(fs.readFileSync(jFile, "utf8"));
+               var fi = { file : sFile, time : new Date(), info : r.types, errs : r.errors };
+               this.fileMap[sFile] = fi;
+               debugLiquidUtils = fi;
+               return fi;
+              });
     }
 
     // Reload .json file if it is stale, and return resulting FileInfo
@@ -139,7 +174,7 @@ export class Annotations {
                       return sInfo
                   }
                   // otherwise, rebuild fileInfo
-                  return this.rebuild(sFile)
+                  return this.rebuild(sFile, sTime)
                 });
     }
 

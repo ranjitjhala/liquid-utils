@@ -1,0 +1,17 @@
+{
+  "name": "liquid-utils",
+  "main": "./lib/liquid-utils",
+  "version": "0.0.2",
+  "author": "Ranjit Jhala",
+  "description": "Utilities for analyzing liquid-type information",
+  "keywords": [],
+  "activationCommands": {},
+  "repository": "https://github.com/ranjitjhala/liquid-utils",
+  "license": "MIT",
+  "engines": {},
+  "dependencies": {
+    "fs": "~0.0.2",
+    "q": "~1.0.0"
+  }
+}
+

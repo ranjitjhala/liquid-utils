@@ -1,4 +1,5 @@
 /// <reference path="../typings/hover.d.ts" />
+export declare var debugLiquidUtils: any;
 export declare type imap<A> = {
     [x: number]: A;
 };
@@ -22,7 +23,7 @@ export declare class Annotations {
     constructor(cmd: string, args: string[], subDir: string);
     private command(sFile);
     private jsonFile(srcFile);
-    private rebuild(sFile);
+    private rebuild(sFile, sTime);
     private refresh(sFile);
     getInfo(p: Hover.Position): Q.Promise<Hover.Info>;
     getErrors(f: string): Q.Promise<Hover.Error[]>;
